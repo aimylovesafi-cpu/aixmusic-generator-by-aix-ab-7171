@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>AIxMUSIC DUAL BRAIN</title>
+<title>AIxMUSIC DUAL BRAIN v8.1.0</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent} body{margin:0;background:#050510;color:#fff;font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:12px}
 .app{width:100%;max-width:420px;background:linear-gradient(180deg,rgba(139,92,246,.2),rgba(0,0,0,.8));border:1.5px solid #8b5cf6;border-radius:28px;padding:18px;box-shadow:0 0 80px rgba(139,92,246,.5);text-align:center}
@@ -17,8 +17,7 @@ button.main{width:100%;background:#8b5cf6;border:none;color:#fff;padding:14px;bo
 <body>
 <div class="app">
   <img src="/logo.png" style="width:72px;border-radius:18px;box-shadow:0 0 20px #8b5cf6">
-  <h2 style="margin:6px 0;letter-spacing:2px">AIxMUSIC DUAL BRAIN</h2>
-  <!-- DUAL BRAIN STATUS -->
+  <h2 style="margin:6px 0;letter-spacing:2px">AIxMUSIC DUAL BRAIN v8.1.0</h2>
   <div class="brain">
     <div id="brain1">🧠 CONDUCTOR<br><small id="b1">Idle - Ready to compose</small></div>
     <div id="brain2">⚡ CREATIVE<br><div id="chatBox">Hey! I'm your creative brain 😎 Ask me anything about music!</div></div>
@@ -40,85 +39,17 @@ button.main{width:100%;background:#8b5cf6;border:none;color:#fff;padding:14px;bo
 // --- CONFIG ---
 const GENRES=['Deep House','Rock','Metal','Classic','Jazz','Blues','Lo-Fi','Trap'];
 let GENRE='Deep House', ctx, masterGain, playing=false, timer, nextNote=0, step=0, logs=[];
-let session=null, sections=[], sectionIdx=0, barCount=0;
+let session=null, sections=[], sectionIdx=0, barCount=0, lastRefill=0;
 
-function log(m){ 
-  logs.push(`[${new Date().toLocaleTimeString()}] ${m}`); 
-  if(logs.length>80) logs.shift(); 
-  document.getElementById('debug').innerText=logs.join('\n'); 
-  document.getElementById('b1').innerText=m.slice(0,40); 
+function log(m){
+  logs.push(`[${new Date().toLocaleTimeString()}] ${m}`);
+  if(logs.length>80) logs.shift();
+  document.getElementById('debug').innerText=logs.join('\n');
+  document.getElementById('b1').innerText=m.slice(0,40);
 }
 function rnd(a,b){return Math.random()*(b-a)+a}
 
-// --- UI SETUP ---
-const gDiv=document.getElementById('genres'); 
-GENRES.forEach(g=>{ 
-  let b=document.createElement('button'); 
-  b.className='g'+(g===GENRE?' active':''); 
-  b.innerText=g; 
-  b.onclick=()=>{
-    GENRE=g; 
-    document.querySelectorAll('.g').forEach(x=>x.classList.remove('active')); 
-    b.classList.add('active'); 
-    session=null; sections=[]; 
-    log(`Genre changed to ${g} - session reset`); 
-  }; 
-  gDiv.appendChild(b); 
-});
-const barsDiv=document.getElementById('bars'); 
-for(let i=0;i<20;i++){let d=document.createElement('div'); d.className='bar'; d.style.height='6px'; barsDiv.appendChild(d);} 
-const bars=document.querySelectorAll('.bar');
-
-// --- AUDIO ENGINE ---
-function initAudio(){ 
-  if(!ctx){ 
-    ctx=new(window.AudioContext||window.webkitAudioContext)(); 
-    masterGain=ctx.createGain(); 
-    masterGain.gain.value=0.85; 
-    masterGain.connect(ctx.destination);
-    log(`AudioContext created: ${ctx.state} sr:${ctx.sampleRate}`);
-  } 
-  if(ctx.state==='suspended') ctx.resume().then(()=>log('AudioContext resumed')); 
-}
-function kick(t){ 
-  let o=ctx.createOscillator(),g=ctx.createGain(); 
-  o.frequency.setValueAtTime(160,t); 
-  o.frequency.exponentialRampToValueAtTime(42,t+0.11); 
-  g.gain.setValueAtTime(0.95,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.5); 
-  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.5); 
-}
-function snare(t){ 
-  let b=ctx.createBuffer(1,ctx.sampleRate*0.18,ctx.sampleRate),d=b.getChannelData(0); 
-  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2); 
-  let s=ctx.createBufferSource(); s.buffer=b; 
-  let g=ctx.createGain(); g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.3); 
-  s.connect(g); g.connect(masterGain); s.start(t); 
-}
-function hat(t,open=false){ 
-  let b=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate),d=b.getChannelData(0); 
-  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length); 
-  let src=ctx.createBufferSource(); src.buffer=b; 
-  let f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=open?3500:8000; 
-  let g=ctx.createGain(); g.gain.setValueAtTime(open?0.35:0.28,t); g.gain.exponentialRampToValueAtTime(0.01,t+(open?0.25:0.07)); 
-  src.connect(f); f.connect(g); g.connect(masterGain); src.start(t); 
-}
-function bass(t,f){ 
-  if(!isFinite(f)) return; 
-  let o=ctx.createOscillator(),g=ctx.createGain(); 
-  o.type='sine'; o.frequency.value=f; 
-  g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.8); 
-  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.85); 
-}
-function lead(t,f,v=0.4){ 
-  if(!isFinite(f)) return; 
-  let o=ctx.createOscillator(),g=ctx.createGain(); 
-  o.type='sawtooth'; o.frequency.value=f; o.detune.value=rnd(-4,4); 
-  g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.5); 
-  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.6); 
-}
-
-
-  // --- SAFE LOCKS FOR FALLBACK ---
+// --- SAFE FALLBACK LOCKS ---
 const SAFE_LOCKS={
   "Deep House":{bpm:124,key:"D minor",scale:[36.7,41.2,49,55,62,65.5,73.4],prog:[0,3,4,3]},
   "Rock":{bpm:138,key:"E minor",scale:[41.2,49,55,62,73.4,82.4,92.4],prog:[0,5,3,4]},
@@ -129,15 +60,48 @@ const SAFE_LOCKS={
   "Lo-Fi":{bpm:82,key:"F major",scale:[43.6,51.9,58.2,65.4,77.7,87.3],prog:[0,3,2,5]},
   "Trap":{bpm:140,key:"G# minor",scale:[51.9,61.7,69.2,77.7,92.4,103.8],prog:[0,5,3,4]}
 };
+function getSafeSession(){ return SAFE_LOCKS[GENRE] || SAFE_LOCKS["Deep House"]; }
 
-function getSafeSession(){
-  return SAFE_LOCKS[GENRE] || SAFE_LOCKS["Deep House"];
+// --- UI SETUP ---
+const gDiv=document.getElementById('genres');
+GENRES.forEach(g=>{
+  let b=document.createElement('button');
+  b.className='g'+(g===GENRE?' active':'');
+  b.innerText=g;
+  b.onclick=()=>{
+    GENRE=g;
+    document.querySelectorAll('.g').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    session=null; sections=[];
+    log(`Genre changed to ${g} - session reset`);
+  };
+  gDiv.appendChild(b);
+});
+const barsDiv=document.getElementById('bars');
+for(let i=0;i<20;i++){let d=document.createElement('div'); d.className='bar'; d.style.height='6px'; barsDiv.appendChild(d);}
+const bars=document.querySelectorAll('.bar');
+
+// --- AUDIO ENGINE ---
+function initAudio(){
+  if(!ctx){
+    ctx=new(window.AudioContext||window.webkitAudioContext)();
+    masterGain=ctx.createGain();
+    masterGain.gain.value=0.85;
+    masterGain.connect(ctx.destination);
+    log(`AudioContext created: ${ctx.state} sr:${ctx.sampleRate}`);
+  }
+  if(ctx.state==='suspended') ctx.resume().then(()=>log('AudioContext resumed'));
 }
+function kick(t){ let o=ctx.createOscillator(),g=ctx.createGain(); o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(42,t+0.11); g.gain.setValueAtTime(0.95,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.5); o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.5); }
+function snare(t){ let b=ctx.createBuffer(1,ctx.sampleRate*0.18,ctx.sampleRate),d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2); let s=ctx.createBufferSource(); s.buffer=b; let g=ctx.createGain(); g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.3); s.connect(g); g.connect(masterGain); s.start(t); }
+function hat(t,open=false){ let b=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate),d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length); let src=ctx.createBufferSource(); src.buffer=b; let f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=open?3500:8000; let g=ctx.createGain(); g.gain.setValueAtTime(open?0.35:0.28,t); g.gain.exponentialRampToValueAtTime(0.01,t+(open?0.25:0.07)); src.connect(f); f.connect(g); g.connect(masterGain); src.start(t); }
+function bass(t,f){ if(!isFinite(f)) return; let o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine'; o.frequency.value=f; g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.8); o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.85); }
+function lead(t,f,v=0.4){ if(!isFinite(f)) return; let o=ctx.createOscillator(),g=ctx.createGain(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=rnd(-4,4); g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.01,t+0.5); o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.6); }
 
+// --- BUFFERING v8.1.0 FIXED ---
 async function bufferSong(){
   document.getElementById('status').innerText='CONDUCTOR buffering...';
-  // ensure session exists BEFORE fetch to avoid session.key error
-  if(!session) session = getSafeSession();
+  if(!session) session = getSafeSession(); // prevent session.key error
   log(`BUFFERING 1 section - genre ${GENRE}`);
   try{
     const controller = new AbortController();
@@ -151,16 +115,13 @@ async function bufferSong(){
     clearTimeout(timeout);
     if(!res.ok) throw new Error('HTTP '+res.status);
     let data=await res.json();
-    // defensive checks
     if(data.lock && data.lock.bpm) session = data.lock;
     if(data.sections && Array.isArray(data.sections) && data.sections.length>0){
       sections = data.sections;
-    } else {
-      throw new Error('Invalid sections');
-    }
-    log(`LOCKED ${session.key} ${session.bpm} BPM | Buffered ${sections.length}`);
+    } else throw new Error('Invalid sections');
+    log(`LOCKED ${session.key} ${session.bpm} BPM | Buffered ${sections.length} - OK`);
   }catch(e){
-    log(`BUFFER fallback (local) : ${e.message}`);
+    log(`BUFFER local fallback: ${e.message}`);
     if(!session) session = getSafeSession();
     sections=[{
       id:"local-pro",
@@ -171,102 +132,30 @@ async function bufferSong(){
       hat:Array(16).fill(0).map((_,i)=>i%2===1?1:0)
     }];
   }
-  sectionIdx=0; barCount=0;
-  document.getElementById('status').innerText=`${session.key} | ${session.bpm} BPM | Ready - ${sections.length} sections`;
-  // background fetch
-  setTimeout(async ()=>{
-    try{
-      let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
-      let data=await res.json();
-      if(data.sections && Array.isArray(data.sections)) { sections.push(...data.sections); log(`BG +${data.sections.length} total ${sections.length}`); }
-    }catch(e){ log('BG buffer skip '+e.message); }
-  },1200);
+  sectionIdx=0; barCount=0; lastRefill=Date.now();
+  document.getElementById('status').innerText=`${session.key} | ${session.bpm} BPM | Ready`;
   return true;
 }
 
 async function needMore(){
-  if(sections.length - sectionIdx >=3) return; // enough
-  log(`Low buffer ${sections.length-sectionIdx} - fetching 1 more`);
+  let remaining = sections.length - sectionIdx;
+  let now = Date.now();
+  if(remaining >= 3) return; // enough buffer
+  if(now - lastRefill < 15000) return; // 15s cooldown
+  if(sections.length > 8) return; // cap
+
+  lastRefill = now;
+  log(`Buffer low (${remaining}) - refilling 1 section...`);
   try{
     let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
     if(!res.ok) throw new Error('http '+res.status);
     let data=await res.json();
-    if(data.sections && data.sections[0]) { sections.push(...data.sections); log(`+${data.sections.length} buffered total ${sections.length}`); }
+    if(data.sections && data.sections[0]) {
+      sections.push(...data.sections);
+      log(`Refilled +1 total ${sections.length}`);
+    }
   }catch(e){
-    log('Refill failed, using local: '+e.message);
-    let lock = session || getSafeSession();
-    sections.push({
-      id:"local-refill",
-      melody:Array(16).fill(null).map((_,i)=> ({n: (Math.random()*lock.scale.length|0), v:0.6})),
-      bass:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
-      kick:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
-      snare:Array(16).fill(0).map((_,i)=>i===4||i===12?1:0),
-      hat:Array(16).fill(0).map((_,i)=>i%2===1?1:0)
-    });
-  }
-}
-  
-  
-  
-  
-  
-  // --- BUFFERING WITH FALLBACK ---
-async function bufferSong(){
-  document.getElementById('status').innerText='🧠 CONDUCTOR buffering...';
-  log('BUFFERING 1 section - fast mode');
-  try{
-    // 4s timeout - prevents infinite buffering
-    const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), 4000);
-    let res=await fetch('/api/conductor',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1}), 
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    let data=await res.json();
-    if(!session) session=data.lock;
-    sections=data.sections;
-    log(`LOCKED ${session.key} ${session.bpm} BPM | Buffered ${sections.length}`);
-  }catch(e){
-    log(`BUFFER timeout, using LOCAL PRO fallback: ${e.message}`);
-    // LOCAL PRO fallback - instant play
-    const LOCKS={ 
-      "Deep House":{bpm:124,key:"D minor",scale:[36.7,41.2,49,55,62,65.5,73.4],prog:[0,3,4,3]},
-      "Metal":{bpm:92,key:"B minor",scale:[30.8,36.7,41.2,46.2,55,61.7,69.2],prog:[0,6,5,3]},
-      "Rock":{bpm:138,key:"E minor",scale:[41.2,49,55,62,73.4,82.4,92.4],prog:[0,5,3,4]}
-    };
-    let lock = LOCKS[GENRE] || LOCKS["Deep House"];
-    session = session || lock;
-    sections=[{
-      id:"local-pro", 
-      melody:Array(16).fill(null).map((_,i)=> ({n: i%4===0? session.prog[Math.floor(i/4)%session.prog.length] : (Math.random()>0.6? (Math.random()*session.scale.length)|0 : null), v:0.7})), 
-      bass:Array(16).fill(0).map((_,i)=>i%4===0?1:0), 
-      kick:Array(16).fill(0).map((_,i)=>i%4===0?1:0), 
-      snare:Array(16).fill(0).map((_,i)=>i===4||i===12?1:0), 
-      hat:Array(16).fill(0).map((_,i)=>i%2===1?1:0)
-    }];
-  }
-  sectionIdx=0; barCount=0;
-  document.getElementById('status').innerText=`♪ ${session.key} | ${session.bpm} BPM | Ready`;
-  // Background buffering for next sections
-  setTimeout(async ()=>{
-    try{
-      let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
-      let data=await res.json(); sections.push(...data.sections); log(`Background buffer +${data.sections.length} total ${sections.length}`);
-    }catch(e){ log('BG buffer failed '+e.message); }
-  },1000);
-  return true;
-}
-
-async function needMore(){
-  if(sections.length - sectionIdx <2){
-    log('Low buffer - fetching 2 more in background');
-    try{
-      let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
-      let data=await res.json(); sections.push(...data.sections); log(`+${data.sections.length} buffered total ${sections.length}`);
-    }catch(e){ log('Buffer refill failed'); }
+    log('Refill skip: '+e.message);
   }
 }
 
@@ -278,8 +167,8 @@ function scheduler(){
   while(nextNote < ctx.currentTime+0.25){
     let s=step%16;
     let t=nextNote;
-    let prog=session.prog; 
-    let chordIdx=prog[Math.floor(s/4)%prog.length]; 
+    let prog=session.prog;
+    let chordIdx=prog[Math.floor(s/4)%prog.length];
     let root=session.scale[chordIdx%session.scale.length];
     if(cur.kick?.[s]) kick(t);
     if(cur.snare?.[s]) snare(t);
@@ -293,7 +182,7 @@ function scheduler(){
       if(barCount%4===0){
         sectionIdx=(sectionIdx+1)%sections.length;
         document.getElementById('status').innerText=`♪ ${session.key} | ${session.bpm} BPM | ${cur.id||sectionIdx} | buf:${sections.length-sectionIdx}`;
-        if(sections.length-sectionIdx<2) needMore();
+        needMore();
       }
     }
   }
@@ -310,7 +199,7 @@ async function toggle(){
     document.getElementById('btn').innerText='■ STOP DUAL ENGINE';
     askCreativeAuto('Song started! Explain what we are playing in a cool way');
   }else{
-    playing=false; clearTimeout(timer); 
+    playing=false; clearTimeout(timer);
     document.getElementById('btn').innerText='▶ BUFFER & PLAY';
     document.getElementById('status').innerText='Stopped';
   }
@@ -324,8 +213,8 @@ async function askCreative(){
   try{
     let res=await fetch('/api/creative',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,genre:GENRE,session})});
     let data=await res.json(); box.innerText=data.a;
-    if(q.toLowerCase().includes('darker')||q.toLowerCase().includes('funk')||q.toLowerCase().includes('more')){ 
-      document.getElementById('prompt').value+=' '+q; log('Prompt updated: '+q); 
+    if(q.toLowerCase().includes('darker')||q.toLowerCase().includes('funk')||q.toLowerCase().includes('more')){
+      document.getElementById('prompt').value+=' '+q; log('Prompt updated: '+q);
     }
   }catch(e){ box.innerText='Creative brain glitched 😅 try again'; }
 }
@@ -336,7 +225,7 @@ async function askCreativeAuto(q){
     let data=await res.json(); box.innerText=data.a;
   }catch(e){ box.innerText='Ready to jam! 🎸'; }
 }
-log('DUAL BRAIN V7.2 EN - READY');
+log('DUAL BRAIN v8.1.0 EN - READY');
 </script>
 </body>
 </html>
