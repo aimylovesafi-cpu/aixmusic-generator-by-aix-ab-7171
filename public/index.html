@@ -240,5 +240,12 @@ async function askCreativeAuto(q){
 }
 log('DUAL BRAIN v8.1.0 EN - READY');
 </script>
+<script>
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register('/sw.js');
+}
+</script>
+
+
 </body>
 </html>
