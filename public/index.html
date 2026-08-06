@@ -117,7 +117,100 @@ function lead(t,f,v=0.4){
   o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.6); 
 }
 
-// --- BUFFERING WITH FALLBACK ---
+
+  // --- SAFE LOCKS FOR FALLBACK ---
+const SAFE_LOCKS={
+  "Deep House":{bpm:124,key:"D minor",scale:[36.7,41.2,49,55,62,65.5,73.4],prog:[0,3,4,3]},
+  "Rock":{bpm:138,key:"E minor",scale:[41.2,49,55,62,73.4,82.4,92.4],prog:[0,5,3,4]},
+  "Metal":{bpm:92,key:"B minor",scale:[30.8,36.7,41.2,46.2,55,61.7,69.2],prog:[0,6,5,3]},
+  "Classic":{bpm:78,key:"C major",scale:[65.4,73.4,82.4,87.3,98,110,123.4],prog:[0,3,4,1]},
+  "Jazz":{bpm:110,key:"Bb major",scale:[58.2,65.4,73.4,77.7,87.3,98,103.8],prog:[1,4,0,5]},
+  "Blues":{bpm:84,key:"A minor",scale:[27.5,32.7,36.7,38.8,41.2,49],prog:[0,0,0,0,3,3,0,0]},
+  "Lo-Fi":{bpm:82,key:"F major",scale:[43.6,51.9,58.2,65.4,77.7,87.3],prog:[0,3,2,5]},
+  "Trap":{bpm:140,key:"G# minor",scale:[51.9,61.7,69.2,77.7,92.4,103.8],prog:[0,5,3,4]}
+};
+
+function getSafeSession(){
+  return SAFE_LOCKS[GENRE] || SAFE_LOCKS["Deep House"];
+}
+
+async function bufferSong(){
+  document.getElementById('status').innerText='CONDUCTOR buffering...';
+  // ensure session exists BEFORE fetch to avoid session.key error
+  if(!session) session = getSafeSession();
+  log(`BUFFERING 1 section - genre ${GENRE}`);
+  try{
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 3500);
+    let res=await fetch('/api/conductor',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1}),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    let data=await res.json();
+    // defensive checks
+    if(data.lock && data.lock.bpm) session = data.lock;
+    if(data.sections && Array.isArray(data.sections) && data.sections.length>0){
+      sections = data.sections;
+    } else {
+      throw new Error('Invalid sections');
+    }
+    log(`LOCKED ${session.key} ${session.bpm} BPM | Buffered ${sections.length}`);
+  }catch(e){
+    log(`BUFFER fallback (local) : ${e.message}`);
+    if(!session) session = getSafeSession();
+    sections=[{
+      id:"local-pro",
+      melody:Array(16).fill(null).map((_,i)=> ({n: i%4===0? session.prog[Math.floor(i/4)%session.prog.length] : (Math.random()>0.6? (Math.random()*session.scale.length|0) : null), v:0.7})),
+      bass:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
+      kick:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
+      snare:Array(16).fill(0).map((_,i)=>i===4||i===12?1:0),
+      hat:Array(16).fill(0).map((_,i)=>i%2===1?1:0)
+    }];
+  }
+  sectionIdx=0; barCount=0;
+  document.getElementById('status').innerText=`${session.key} | ${session.bpm} BPM | Ready - ${sections.length} sections`;
+  // background fetch
+  setTimeout(async ()=>{
+    try{
+      let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
+      let data=await res.json();
+      if(data.sections && Array.isArray(data.sections)) { sections.push(...data.sections); log(`BG +${data.sections.length} total ${sections.length}`); }
+    }catch(e){ log('BG buffer skip '+e.message); }
+  },1200);
+  return true;
+}
+
+async function needMore(){
+  if(sections.length - sectionIdx >=3) return; // enough
+  log(`Low buffer ${sections.length-sectionIdx} - fetching 1 more`);
+  try{
+    let res=await fetch('/api/conductor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({genre:GENRE,prompt:document.getElementById('prompt').value,session,need:1})});
+    if(!res.ok) throw new Error('http '+res.status);
+    let data=await res.json();
+    if(data.sections && data.sections[0]) { sections.push(...data.sections); log(`+${data.sections.length} buffered total ${sections.length}`); }
+  }catch(e){
+    log('Refill failed, using local: '+e.message);
+    let lock = session || getSafeSession();
+    sections.push({
+      id:"local-refill",
+      melody:Array(16).fill(null).map((_,i)=> ({n: (Math.random()*lock.scale.length|0), v:0.6})),
+      bass:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
+      kick:Array(16).fill(0).map((_,i)=>i%4===0?1:0),
+      snare:Array(16).fill(0).map((_,i)=>i===4||i===12?1:0),
+      hat:Array(16).fill(0).map((_,i)=>i%2===1?1:0)
+    });
+  }
+}
+  
+  
+  
+  
+  
+  // --- BUFFERING WITH FALLBACK ---
 async function bufferSong(){
   document.getElementById('status').innerText='🧠 CONDUCTOR buffering...';
   log('BUFFERING 1 section - fast mode');
